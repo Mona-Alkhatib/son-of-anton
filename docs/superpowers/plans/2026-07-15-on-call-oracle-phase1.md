@@ -1963,7 +1963,6 @@ from unittest.mock import AsyncMock, patch
 from typer.testing import CliRunner
 
 from oracle.cli import app
-from oracle.llm import LLMResult
 from oracle.types import IncidentResponse
 
 runner = CliRunner()
@@ -1981,13 +1980,12 @@ def _fake_response() -> IncidentResponse:
 
 
 def test_ask_prints_answer() -> None:
+    svc = AsyncMock()
+    svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli._build_service") as build,
-        patch("oracle.cli._maybe_close_pool", AsyncMock()),
+        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("oracle.cli.close_pool", AsyncMock()),
     ):
-        svc = build.return_value
-        svc.ask = AsyncMock(return_value=_fake_response())
-
         r = runner.invoke(app, ["ask", "hi there"])
 
     assert r.exit_code == 0
@@ -1995,13 +1993,12 @@ def test_ask_prints_answer() -> None:
 
 
 def test_ask_json_flag_emits_json() -> None:
+    svc = AsyncMock()
+    svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli._build_service") as build,
-        patch("oracle.cli._maybe_close_pool", AsyncMock()),
+        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("oracle.cli.close_pool", AsyncMock()),
     ):
-        svc = build.return_value
-        svc.ask = AsyncMock(return_value=_fake_response())
-
         r = runner.invoke(app, ["ask", "hi", "--json"])
 
     assert r.exit_code == 0
@@ -2016,6 +2013,8 @@ uv run pytest tests/unit/test_cli.py -v
 
 - [ ] **Step 3: Implement `oracle/cli.py`**
 
+Key correctness constraint: every command runs a single `asyncio.run(_work())`; the asyncpg pool is created and closed inside that same loop. Do not spin a second event loop.
+
 ```python
 from __future__ import annotations
 
@@ -2023,6 +2022,7 @@ import asyncio
 import sys
 from typing import Optional
 
+import asyncpg
 import typer
 from rich.console import Console
 
@@ -2037,19 +2037,13 @@ app = typer.Typer(help="On-Call Oracle CLI (phase 1)")
 console = Console()
 
 
-def _build_service() -> OracleService:
-    # In tests this is patched; in production it wires the real deps.
-    async def _init() -> OracleService:
-        p = await pool()
-        writer = AuditWriter(pool=p)
-        gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
-        return OracleService(llm=gateway, retriever=StubRetriever())
-
-    return asyncio.get_event_loop().run_until_complete(_init())
-
-
-async def _maybe_close_pool() -> None:
-    await close_pool()
+async def build_service() -> tuple[OracleService, asyncpg.Pool]:
+    """Async factory: opens the pool and wires the service on the current loop."""
+    p = await pool()
+    writer = AuditWriter(pool=p)
+    gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
+    svc = OracleService(llm=gateway, retriever=StubRetriever())
+    return svc, p
 
 
 @app.command()
@@ -2062,10 +2056,9 @@ def ask(
     if stream:
         console.print("[yellow]streaming lands in phase 3; ignoring --stream.[/yellow]")
 
-    svc = _build_service()
-
-    async def _run() -> int:
+    async def _work() -> int:
         try:
+            svc, _ = await build_service()
             resp = await svc.ask(
                 question,
                 incident_id=incident_id,
@@ -2081,22 +2074,16 @@ def ask(
             console.print(f"[red]error:[/red] {exc}")
             return 1
         finally:
-            await _maybe_close_pool()
+            await close_pool()
 
-    raise typer.Exit(asyncio.run(_run()))
-
-
-@app.command("audit")
-def audit_group() -> None:
-    """Audit subcommand root."""
-    typer.echo("subcommands: tail")
+    raise typer.Exit(asyncio.run(_work()))
 
 
 @app.command("audit-tail")
 def audit_tail(limit: int = typer.Option(10, "--limit")) -> None:
-    async def _run() -> int:
-        p = await pool()
+    async def _work() -> int:
         try:
+            p = await pool()
             rows = await p.fetch(
                 "select request_id, prompt_name, model, tokens_in, tokens_out, "
                 "cost_usd, latency_ms, cache_read, error, created_at "
@@ -2109,7 +2096,7 @@ def audit_tail(limit: int = typer.Option(10, "--limit")) -> None:
         finally:
             await close_pool()
 
-    raise typer.Exit(asyncio.run(_run()))
+    raise typer.Exit(asyncio.run(_work()))
 
 
 if __name__ == "__main__":
