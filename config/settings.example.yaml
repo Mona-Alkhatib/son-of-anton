@@ -1,0 +1,5 @@
+# Reference only. Real settings load from environment variables.
+# See .env.example for the runtime configuration.
+default_model: claude-sonnet-4-6
+per_incident_budget_usd: 0.50
+log_level: INFO
