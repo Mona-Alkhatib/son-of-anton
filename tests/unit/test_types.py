@@ -28,14 +28,17 @@ def test_caller_rejects_unknown_source() -> None:
 def test_frozen_model_cannot_mutate() -> None:
     c = Citation(source_type="runbook", source_id="r1.md", snippet="hi", score=0.5)
     with pytest.raises(ValidationError):
-        c.snippet = "changed"   # type: ignore[misc]
+        c.snippet = "changed"  # type: ignore[misc]
 
 
 def test_extra_fields_forbidden() -> None:
     with pytest.raises(ValidationError):
         Citation(
-            source_type="runbook", source_id="r1.md", snippet="hi", score=0.5,
-            bogus="nope",   # type: ignore[call-arg]
+            source_type="runbook",
+            source_id="r1.md",
+            snippet="hi",
+            score=0.5,
+            bogus="nope",  # type: ignore[call-arg]
         )
 
 
@@ -58,9 +61,7 @@ def test_routing_decision_confidence_bounds() -> None:
     )
     assert ok.confidence == 0.85
     with pytest.raises(ValidationError):
-        RoutingDecision(
-            specialist="freshness", confidence=1.5, reasoning="r", hand_off_context={}
-        )
+        RoutingDecision(specialist="freshness", confidence=1.5, reasoning="r", hand_off_context={})
 
 
 def test_specialist_findings_with_action() -> None:
@@ -81,7 +82,5 @@ def test_specialist_findings_with_action() -> None:
 
 
 def test_approval_decision() -> None:
-    d = ApprovalDecision(
-        approved=True, decided_by="mona", decided_at=datetime.now(UTC), note=None
-    )
+    d = ApprovalDecision(approved=True, decided_by="mona", decided_at=datetime.now(UTC), note=None)
     assert d.approved

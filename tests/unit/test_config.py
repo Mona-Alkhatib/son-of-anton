@@ -1,9 +1,10 @@
-from pydantic import SecretStr
+import pytest
+from pydantic import ValidationError
 
 from oracle.config import Settings
 
 
-def test_settings_from_env(monkeypatch) -> None:
+def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setenv("DATABASE_URL", "postgres://x:y@localhost/z")
     monkeypatch.setenv("ORACLE_LOG_LEVEL", "DEBUG")
@@ -17,10 +18,9 @@ def test_settings_from_env(monkeypatch) -> None:
     assert s.per_incident_budget_usd == 0.50
 
 
-def test_settings_missing_required_raises(monkeypatch) -> None:
+def test_settings_missing_required_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    import pytest
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()

@@ -22,9 +22,7 @@ async def test_all_tables_exist() -> None:
     dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn=dsn)
     try:
-        rows = await conn.fetch(
-            "select tablename from pg_tables where schemaname = 'public'"
-        )
+        rows = await conn.fetch("select tablename from pg_tables where schemaname = 'public'")
     finally:
         await conn.close()
     tables = {r["tablename"] for r in rows}

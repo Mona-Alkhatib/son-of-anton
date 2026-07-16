@@ -78,4 +78,4 @@ def test_render_missing_var_raises(prompt_root: Path) -> None:
 def test_prompt_frozen(prompt_root: Path) -> None:
     p = load("sample", root=prompt_root)
     with pytest.raises(ValidationError):
-        p.temperature = 0.9   # type: ignore[misc]
+        p.temperature = 0.9  # type: ignore[misc]
