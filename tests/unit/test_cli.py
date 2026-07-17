@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, patch
 
 from typer.testing import CliRunner
 
-from oracle.cli import app
-from oracle.types import IncidentResponse
+from anton.cli import app
+from anton.types import IncidentResponse
 
 runner = CliRunner()
 
@@ -23,8 +23,8 @@ def test_ask_prints_answer() -> None:
     svc = AsyncMock()
     svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
-        patch("oracle.cli.close_pool", AsyncMock()),
+        patch("anton.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("anton.cli.close_pool", AsyncMock()),
     ):
         r = runner.invoke(app, ["ask", "hi there"])
 
@@ -36,8 +36,8 @@ def test_ask_json_flag_emits_json() -> None:
     svc = AsyncMock()
     svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
-        patch("oracle.cli.close_pool", AsyncMock()),
+        patch("anton.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("anton.cli.close_pool", AsyncMock()),
     ):
         r = runner.invoke(app, ["ask", "hi", "--json"])
 

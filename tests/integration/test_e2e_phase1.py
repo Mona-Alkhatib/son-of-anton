@@ -3,11 +3,11 @@ import os
 import asyncpg
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMGateway
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.audit import AuditWriter
+from anton.llm import LLMGateway
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio, pytest.mark.needs_llm]
 
@@ -27,7 +27,7 @@ async def test_ask_end_to_end_writes_audit_row() -> None:
 
         writer = AuditWriter(pool=pool)
         gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
-        svc = OracleService(llm=gateway, retriever=StubRetriever())
+        svc = AntonService(llm=gateway, retriever=StubRetriever())
 
         resp = await svc.ask(
             "in one sentence: what is dbt?",

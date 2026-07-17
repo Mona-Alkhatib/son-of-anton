@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 _INSERT_LLM = """
 insert into audit_llm_calls

@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.audit import AuditWriter
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 
 @pytest.fixture

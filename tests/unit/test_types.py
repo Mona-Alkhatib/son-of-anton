@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from oracle.types import (
+from anton.types import (
     ApprovalDecision,
     Caller,
     Citation,

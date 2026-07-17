@@ -1,6 +1,6 @@
 import pytest
 
-from oracle.retrieval.stub import StubRetriever
+from anton.retrieval.stub import StubRetriever
 
 
 @pytest.mark.asyncio

@@ -1,13 +1,12 @@
-from typing import Protocol
-
-from oracle.types import Citation
+from anton.types import Citation
 
 
-class Retriever(Protocol):
+class StubRetriever:
     async def search(
         self,
         query: str,
         *,
         scope: list[str] | None = None,
         top_k: int = 5,
-    ) -> list[Citation]: ...
+    ) -> list[Citation]:
+        return []

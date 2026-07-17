@@ -7,29 +7,29 @@ import asyncpg
 import typer
 from rich.console import Console
 
-from oracle.audit import AuditWriter
-from oracle.db import close_pool, pool
-from oracle.llm import LLMGateway
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.audit import AuditWriter
+from anton.db import close_pool, pool
+from anton.llm import LLMGateway
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
-app = typer.Typer(help="On-Call Oracle CLI (phase 1)")
+app = typer.Typer(help="Son of Anton CLI (phase 1)")
 console = Console()
 
 
-async def build_service() -> tuple[OracleService, asyncpg.Pool]:
+async def build_service() -> tuple[AntonService, asyncpg.Pool]:
     """Async factory: opens the pool and wires the service on the current loop."""
     p = await pool()
     writer = AuditWriter(pool=p)
     gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
-    svc = OracleService(llm=gateway, retriever=StubRetriever())
+    svc = AntonService(llm=gateway, retriever=StubRetriever())
     return svc, p
 
 
 @app.command()
 def ask(
-    question: str = typer.Argument(..., help="Question for the Oracle"),
+    question: str = typer.Argument(..., help="Question for Anton"),
     incident_id: str | None = typer.Option(None, "--incident-id"),
     json_out: bool = typer.Option(False, "--json"),
     stream: bool = typer.Option(False, "--stream"),

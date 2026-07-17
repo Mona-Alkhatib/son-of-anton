@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncpg
 
-from oracle.config import get_settings
+from anton.config import get_settings
 
 _pool: asyncpg.Pool | None = None
 

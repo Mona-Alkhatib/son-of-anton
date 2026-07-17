@@ -1,5 +1,5 @@
-import oracle
+import anton
 
 
 def test_package_imports() -> None:
-    assert oracle.__name__ == "oracle"
+    assert anton.__name__ == "anton"

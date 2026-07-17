@@ -2,10 +2,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oracle.llm import LLMResult
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.llm import LLMResult
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ async def test_ask_returns_incident_response_and_calls_llm() -> None:
             request_id="resp_1",
         )
     )
-    svc = OracleService(llm=llm, retriever=StubRetriever())
+    svc = AntonService(llm=llm, retriever=StubRetriever())
 
     resp = await svc.ask(
         "why is fct_orders stale?",
@@ -56,7 +56,7 @@ async def test_ask_uses_provided_incident_id() -> None:
             request_id="r",
         )
     )
-    svc = OracleService(llm=llm, retriever=StubRetriever())
+    svc = AntonService(llm=llm, retriever=StubRetriever())
 
     resp = await svc.ask("hi", incident_id="INC-fixed", caller=Caller(source="api", identity="k"))
     assert resp.incident_id == "INC-fixed"

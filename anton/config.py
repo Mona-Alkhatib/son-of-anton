@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     database_url: str
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
-        default="INFO", alias="ORACLE_LOG_LEVEL"
+        default="INFO", alias="ANTON_LOG_LEVEL"
     )
     default_model: str = "claude-sonnet-4-6"
     per_incident_budget_usd: float = 0.50

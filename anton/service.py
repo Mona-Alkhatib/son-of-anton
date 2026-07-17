@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import uuid
 
-from oracle.llm import LLMGateway
-from oracle.prompts import load as load_prompt
-from oracle.retrieval.base import Retriever
-from oracle.types import Caller, IncidentResponse
+from anton.llm import LLMGateway
+from anton.prompts import load as load_prompt
+from anton.retrieval.base import Retriever
+from anton.types import Caller, IncidentResponse
 
 
-class OracleService:
+class AntonService:
     def __init__(
         self,
         *,

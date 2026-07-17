@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic_core import ValidationError
 
-from oracle.prompts import load
+from anton.prompts import load
 
 
 @pytest.fixture

@@ -1,13 +1,13 @@
-# On-Call Oracle: Design Spec
+# Son of Anton: Design Spec
 
 **Status:** Draft
 **Author:** Mona Alkhatib
 **Date:** 2026-07-15
-**Repo:** `on-call-oracle`
+**Repo:** `son-of-anton`
 
 ## 1. Thesis and product framing
 
-**Product:** A multi-agent AI on-call assistant for data teams. When an alert fires or a data engineer asks *"why is `fct_orders` stale?"*, On-Call Oracle classifies the incident, dispatches to a specialist agent, retrieves grounded context (runbooks, past postmortems, DAG source, dbt manifest, warehouse metrics), drafts an answer with citations, drafts side-effect actions (Airflow retries, Slack updates, PagerDuty pages), and executes them only after human approval.
+**Product:** A multi-agent AI on-call assistant for data teams. When an alert fires or a data engineer asks *"why is `fct_orders` stale?"*, Son of Anton classifies the incident, dispatches to a specialist agent, retrieves grounded context (runbooks, past postmortems, DAG source, dbt manifest, warehouse metrics), drafts an answer with citations, drafts side-effect actions (Airflow retries, Slack updates, PagerDuty pages), and executes them only after human approval.
 
 **Positioning in the portfolio:** Complements `lineage-oracle` (structural questions about the warehouse) and `dq-watchdog` (detects the anomalies that trigger these incidents). This project answers the *"now what?"* question that follows a dq-watchdog alert.
 
@@ -19,9 +19,9 @@ The v1 repo is complete when:
 
 1. `make demo` on a laptop with Docker and an `ANTHROPIC_API_KEY` produces a running local stack in under 3 minutes.
 2. Five planted incident scenarios reproduce reliably; the agent handles each with the expected routing + citations + action set (see Section 9).
-3. The full 5-metric eval harness runs end-to-end via `uv run oracle evals` and publishes a scenario-level table plus an ablation table to the README.
+3. The full 5-metric eval harness runs end-to-end via `uv run anton evals` and publishes a scenario-level table plus an ablation table to the README.
 4. The Slack bot ships as a runnable adapter with an app manifest committed to the repo; a `docs/DEPLOY.md` walks through installation into a real workspace.
-5. Every LLM call goes through the prompt registry + LiteLLM gateway; provider swap (`LITELLM_MODEL=openai/gpt-4o oracle ask ...`) works without code changes.
+5. Every LLM call goes through the prompt registry + LiteLLM gateway; provider swap (`LITELLM_MODEL=openai/gpt-4o anton ask ...`) works without code changes.
 6. Every write action is idempotency-keyed, config allow-listed, and requires approval by default.
 7. CI runs the fast-subset eval on every PR and posts a delta comment.
 
@@ -37,7 +37,7 @@ The v1 repo is complete when:
 
 Six layers, top to bottom:
 
-1. **Interfaces:** FastAPI (SSE streaming), Streamlit chat, Typer CLI, Slack bot (`bolt-python`). All are thin adapters over one `OracleService`.
+1. **Interfaces:** FastAPI (SSE streaming), Streamlit chat, Typer CLI, Slack bot (`bolt-python`). All are thin adapters over one `AntonService`.
 2. **Multi-agent orchestrator:** Router agent (Claude Haiku 4.5) → one of four Specialist agents (Claude Sonnet 4.6) → Synthesizer agent (Claude Sonnet 4.6). Every LLM call is a `Prompt.load(name)` + `llm.complete(...)` pair.
 3. **Retrieval layer:** Qdrant (dense, Voyage-3-large embeddings) + BM25 (`bm25s`) hybrid retrieval via RRF, plus Voyage-rerank-2 on the top 20. Single Qdrant collection with `source_type` payload filtering per specialist.
 4. **Adapters (ports/adapters):** `SlackClient`, `AirflowClient`, `WarehouseClient`, `PagerClient`. Each has a `Mock*` (local demo) and `Real*` (production) implementation. Selection via config.
@@ -48,7 +48,7 @@ Six layers, top to bottom:
 
 ```
 Slack / API / CLI  ─┐
-                    ├─► OracleService ─► Router ─► Specialist ─► Synthesizer ─► IncidentResponse
+                    ├─► AntonService ─► Router ─► Specialist ─► Synthesizer ─► IncidentResponse
 Streamlit UI       ─┘                       │           │             │
                                             ▼           ▼             ▼
                                     Prompt Registry   Retrieval    Adapters
@@ -108,12 +108,12 @@ Each specialist emits `SpecialistFindings { root_cause_hypothesis: str, evidence
 | dbt manifest | `target/manifest.json` | Per-model chunk (name + description + columns + tests + refs) | `source_type=dbt_model`, `model_name`, `materialized`, `tags[]` |
 | DQ alerts | `dq-watchdog /admin/alerts` or seeded JSON | Per-alert chunk (metric + timestamp + anomaly type + affected table) | `source_type=dq_alert`, `metric`, `table`, `severity`, `resolved` |
 
-### 6.2 Ingestion pipeline (`oracle ingest`)
+### 6.2 Ingestion pipeline (`anton ingest`)
 
 1. Walk each corpus. Compute content hash per chunk; skip unchanged (incremental).
 2. Embed with Voyage-3-large.
 3. Batch upsert to Qdrant with payload + content hash.
-4. Build a `bm25s` index over the same chunks; persist to `.oracle/bm25.pkl`.
+4. Build a `bm25s` index over the same chunks; persist to `.anton/bm25.pkl`.
 5. Emit ingestion report: chunks per corpus, embed cost, elapsed.
 
 ### 6.3 Retrieval flow (per specialist call)
@@ -141,7 +141,7 @@ query ──┬─► dense k=40 (Qdrant, filter source_type ∈ specialist.scop
 
 ## 7. Prompt registry + LLM gateway
 
-### 7.1 Prompt registry (`oracle.prompts`)
+### 7.1 Prompt registry (`anton.prompts`)
 
 ```
 prompts/
@@ -181,7 +181,7 @@ tools: [get_freshness_metric, get_upstream_lineage, get_dq_watchdog_alerts, sear
 
 Loader: `prompts.load("freshness")` returns a typed `Prompt` with `.render(**vars)` and `.metadata`. A/B routing: config maps `prompt_name → { version: str, weight: float }` (e.g. 90% v1 / 10% v2 in prod). Every eval result is tagged with `prompt_name@version`.
 
-### 7.2 LLM gateway (`oracle.llm`)
+### 7.2 LLM gateway (`anton.llm`)
 
 Thin wrapper around **LiteLLM**. Every call goes through one policy layer:
 
@@ -208,7 +208,7 @@ Instrumentation per call:
 ### 8.1 Layout
 
 ```
-oracle/adapters/
+anton/adapters/
 ├── base.py                # Protocols
 ├── slack/{mock,real}.py
 ├── airflow/{mock,real}.py
@@ -271,8 +271,8 @@ Anything not on the allow-list returns `PermissionDeniedAction`, logged to audit
 - `qdrant` (v1.13): vector store.
 - `airflow`: `apache/airflow` 3.x standalone (webserver + scheduler + one worker).
 - `mock-slack`: small FastAPI app that renders posted messages at `:8080`.
-- `oracle-api`: FastAPI service.
-- `oracle-ui`: Streamlit chat.
+- `anton-api`: FastAPI service.
+- `anton-ui`: Streamlit chat.
 
 Volumes for Postgres, Qdrant, Airflow logs. Health checks per service; `docker compose up --wait` blocks until the stack is usable.
 
@@ -295,17 +295,17 @@ Volumes for Postgres, Qdrant, Airflow logs. Health checks per service; `docker c
 | 5 | `broad_question` | User asks "how do we handle X" with no live incident. | Route `general`; RAG over runbooks; answer with citations; no actions proposed. |
 
 Each scenario ships with:
-- A shell command to plant it: `oracle demo plant --scenario <name>`.
+- A shell command to plant it: `anton demo plant --scenario <name>`.
 - A matching golden-set entry: `evals/golden/<scenario>.yaml`.
-- A cleanup command: `oracle demo reset`.
+- A cleanup command: `anton demo reset`.
 
 ### 9.4 One-command demo
 
 ```
 make demo
   → docker compose up -d --wait
-  → uv run oracle ingest --config demo/ingest.yaml
-  → uv run oracle demo plant --scenario stale_orders
+  → uv run anton ingest --config demo/ingest.yaml
+  → uv run anton demo plant --scenario stale_orders
   → open http://localhost:8501       # streamlit
   → open http://localhost:8080       # mock slack
   → open http://localhost:8080/dags  # airflow UI
@@ -317,48 +317,48 @@ make demo
 
 ## 10. Interfaces
 
-All four interfaces are thin adapters over one `OracleService`:
+All four interfaces are thin adapters over one `AntonService`:
 
 ```python
-class OracleService:
+class AntonService:
     async def ask(self, question: str, *, incident_id: str | None, caller: Caller, stream: bool = False) -> IncidentResponse | AsyncIterator[Chunk]: ...
     async def resolve_approval(self, approval_ref: ApprovalRequestRef, decision: ApprovalDecision) -> list[ActionResult]: ...
 ```
 
-### 10.1 FastAPI (`oracle serve`)
+### 10.1 FastAPI (`anton serve`)
 
 - `POST /v1/ask`: question in, `IncidentResponse` out. `Accept: text/event-stream` flips to SSE.
 - `POST /v1/approvals/{ref}`: approve / deny a pending write action.
 - `GET /v1/incidents/{id}`: full trajectory (routing + findings + tool calls + audit rows).
 - `GET /health`, `GET /metrics` (Prometheus format).
-- Auth: `X-Oracle-Key` header, per-key rate limits via `slowapi`. Keys in Postgres.
+- Auth: `X-Anton-Key` header, per-key rate limits via `slowapi`. Keys in Postgres.
 
-### 10.2 Streamlit (`oracle ui`)
+### 10.2 Streamlit (`anton ui`)
 
 - Left pane: streaming chat + expandable trajectory panel.
 - Right pane: pending approvals + recent incidents.
 - Sidebar switch: `Provider: Anthropic | OpenAI | Local vLLM` (proves the gateway is real).
 - Talks to FastAPI over HTTPX; no direct service access.
 
-### 10.3 CLI (`oracle`, Typer)
+### 10.3 CLI (`anton`, Typer)
 
 ```
-oracle ingest [--corpus PATH ...]
-oracle ask "..." [--incident-id ID] [--json | --stream]
-oracle serve
-oracle ui
-oracle slack
-oracle evals [--metric all|routing|retrieval|answer|trajectory|safety]
-oracle audit tail
+anton ingest [--corpus PATH ...]
+anton ask "..." [--incident-id ID] [--json | --stream]
+anton serve
+anton ui
+anton slack
+anton evals [--metric all|routing|retrieval|answer|trajectory|safety]
+anton audit tail
 ```
 
-### 10.4 Slack bot (`oracle slack`, bolt-python)
+### 10.4 Slack bot (`anton slack`, bolt-python)
 
 - App manifest committed to repo.
-- Trigger: `@on-call-oracle <question>` in-channel or DM.
+- Trigger: `@son-of-anton <question>` in-channel or DM.
 - Threaded reply with a collapsed "See how I got here" Block Kit section.
 - `write=true` actions render as an Approve / Deny block with an "Expand command" affordance. Approve fires `resolve_approval`; message edits in place with the result. 15-min approval timeout (configurable).
-- Slash `/oracle-status <incident_id>` opens a full-trajectory modal.
+- Slash `/anton-status <incident_id>` opens a full-trajectory modal.
 - Bot state (installations, tokens, approvals) in Postgres.
 
 ## 11. State + audit log
@@ -417,17 +417,17 @@ Emitted per-stage plus end-to-end. Columns: `mean tokens (in/out)`, `p50 latency
 
 ### 12.6 CI integration
 
-- `.github/workflows/evals.yml` runs on PRs touching `oracle/`, `prompts/`, or `evals/golden/`.
+- `.github/workflows/evals.yml` runs on PRs touching `anton/`, `prompts/`, or `evals/golden/`.
 - Fast subset (5 scenarios) on push; full suite on `main` merge + nightly cron.
 - PR comment posts the delta table.
 
 ### 12.7 Running
 
 ```
-uv run oracle evals                          # full suite
-uv run oracle evals --metric retrieval       # one metric
-uv run oracle evals --scenario stale_orders  # one incident
-uv run oracle evals --prompt-version freshness@v2  # A/B override
+uv run anton evals                          # full suite
+uv run anton evals --metric retrieval       # one metric
+uv run anton evals --scenario stale_orders  # one incident
+uv run anton evals --prompt-version freshness@v2  # A/B override
 ```
 
 Without `ANTHROPIC_API_KEY`: LLM-dependent metrics skip, but retrieval + trajectory + action-safety metrics run (they need no LLM).
@@ -458,7 +458,7 @@ Fixtures for the unit tier: `MockSlackClient` records posted messages; `MockAirf
 ## 15. Repo structure
 
 ```
-on-call-oracle/
+son-of-anton/
 ├── README.md
 ├── Makefile
 ├── docker-compose.yml
@@ -469,10 +469,10 @@ on-call-oracle/
 │   ├── actions.yaml
 │   ├── ingest.yaml
 │   └── litellm.yaml
-├── oracle/
+├── anton/
 │   ├── __init__.py
 │   ├── cli.py
-│   ├── service.py                  # OracleService
+│   ├── service.py                  # AntonService
 │   ├── agents/
 │   │   ├── router.py
 │   │   ├── specialists/
@@ -555,8 +555,8 @@ on-call-oracle/
 
 Rough phasing so the project can be paused with a shippable artifact at each phase:
 
-- **Phase 1: Foundation (~1 week).** Repo scaffold, `OracleService` skeleton, Postgres schema + migrations, prompt registry, LiteLLM gateway, audit log. Deliverable: `oracle ask` end-to-end with a stub retriever and a single generic specialist. Read-only.
-- **Phase 2: Retrieval (~1 week).** Qdrant + BM25 + rerank, all five corpora ingesters, `oracle ingest` CLI. Deliverable: retrieval ablation table with real numbers.
+- **Phase 1: Foundation (~1 week).** Repo scaffold, `AntonService` skeleton, Postgres schema + migrations, prompt registry, LiteLLM gateway, audit log. Deliverable: `anton ask` end-to-end with a stub retriever and a single generic specialist. Read-only.
+- **Phase 2: Retrieval (~1 week).** Qdrant + BM25 + rerank, all five corpora ingesters, `anton ingest` CLI. Deliverable: retrieval ablation table with real numbers.
 - **Phase 3: Multi-agent (~1 week).** Router + four specialists + synthesizer + trajectory serialization. Deliverable: routing + trajectory metrics passing on the golden set.
 - **Phase 4: Adapters + demo (~1 week).** All four ports with mock + demo-real implementations, `docker-compose.yml`, five planted scenarios, `make demo`. Deliverable: end-to-end demo GIF.
 - **Phase 5: Slack + polish (~1 week).** bolt-python bot, `docker-compose.real.yml`, `docs/DEPLOY.md`, README, CI, eval publishing. Deliverable: v1 tag + GitHub release.

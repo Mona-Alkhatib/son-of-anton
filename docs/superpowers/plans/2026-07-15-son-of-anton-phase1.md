@@ -1,8 +1,8 @@
-# On-Call Oracle Phase 1: Foundation Implementation Plan
+# Son of Anton Phase 1: Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a working `oracle ask` end-to-end path: CLI receives a question, `OracleService` loads a prompt from the registry, LiteLLM gateway calls Claude with instrumentation, results are persisted to a Postgres audit log, and the answer streams back to the terminal. Read-only, single generic specialist, stub retriever.
+**Goal:** Ship a working `anton ask` end-to-end path: CLI receives a question, `AntonService` loads a prompt from the registry, LiteLLM gateway calls Claude with instrumentation, results are persisted to a Postgres audit log, and the answer streams back to the terminal. Read-only, single generic specialist, stub retriever.
 
 **Architecture:** Foundation layer of the design spec. Every downstream phase (retrieval, multi-agent, adapters, Slack) plugs into the interfaces defined here. Layout follows spec Section 15.
 
@@ -14,10 +14,10 @@
 - All git commits authored as `Mona Alkhatib <muna.alkhateeb@gmail.com>`. No Claude co-author trailer. Repo config already set at init time; verify per commit.
 - Python `>=3.11,<3.13`. Pydantic v2. Typer for the CLI. Ruff + mypy strict for linting and typing.
 - Postgres 16-alpine. `dbmate` for schema migrations, one SQL file per table under `migrations/`.
-- Every LLM call routes through `oracle.llm.LLMGateway`. Direct `anthropic.Anthropic(...)` calls are forbidden.
-- Every prompt lives in `prompts/*.yaml` and is loaded via `oracle.prompts.load(name, version=...)`. No inline f-string prompts.
+- Every LLM call routes through `anton.llm.LLMGateway`. Direct `anthropic.Anthropic(...)` calls are forbidden.
+- Every prompt lives in `prompts/*.yaml` and is loaded via `anton.prompts.load(name, version=...)`. No inline f-string prompts.
 - Every LLM call writes exactly one row to `audit_llm_calls` with the schema from spec Section 11.
-- All Pydantic models derive from `oracle.types.OracleModel` (a common base with `model_config = ConfigDict(frozen=True, extra="forbid")`).
+- All Pydantic models derive from `anton.types.OracleModel` (a common base with `model_config = ConfigDict(frozen=True, extra="forbid")`).
 - Tests use `pytest`. Unit tests never touch Postgres or Anthropic. Integration tests run against real docker-compose services; skipped without `ANTHROPIC_API_KEY`.
 - Every task ends with a commit. Prefer conventional-commit prefixes (`feat:`, `test:`, `chore:`, `docs:`).
 
@@ -28,7 +28,7 @@
 Phase 1 produces these files (create unless marked `exists`):
 
 ```
-on-call-oracle/
+son-of-anton/
 ├── .gitignore                                (exists)
 ├── .env.example
 ├── README.md
@@ -48,7 +48,7 @@ on-call-oracle/
 │   ├── 20260715120400_create_approvals.sql
 │   ├── 20260715120500_create_audit_llm_calls.sql
 │   └── 20260715120600_create_slack_installations.sql
-├── oracle/
+├── anton/
 │   ├── __init__.py
 │   ├── config.py                             # Settings loader
 │   ├── types.py                              # Pydantic domain types
@@ -60,7 +60,7 @@ on-call-oracle/
 │   │   ├── __init__.py
 │   │   ├── base.py                           # Retriever protocol
 │   │   └── stub.py                           # No-op retriever for Phase 1
-│   ├── service.py                            # OracleService orchestrator
+│   ├── service.py                            # AntonService orchestrator
 │   └── cli.py                                # Typer CLI
 ├── tests/
 │   ├── __init__.py
@@ -80,8 +80,8 @@ on-call-oracle/
 │       ├── test_db_migrations.py
 │       └── test_e2e_phase1.py
 └── docs/superpowers/
-    ├── specs/2026-07-15-on-call-oracle-design.md   (exists)
-    └── plans/2026-07-15-on-call-oracle-phase1.md   (this file)
+    ├── specs/2026-07-15-son-of-anton-design.md   (exists)
+    └── plans/2026-07-15-son-of-anton-phase1.md   (this file)
 ```
 
 Split rationale: `db.py` isolates connection-pool + row-mapping concerns from the audit-writing intent (`audit.py`); `retrieval/` gets its own package because Phase 2 will fill it with Qdrant + BM25 + rerank without touching `service.py`.
@@ -91,18 +91,18 @@ Split rationale: `db.py` isolates connection-pool + row-mapping concerns from th
 ## Task 1: Project scaffold + tooling
 
 **Files:**
-- Create: `pyproject.toml`, `README.md`, `Makefile`, `.env.example`, `oracle/__init__.py`, `tests/__init__.py`, `tests/conftest.py`
+- Create: `pyproject.toml`, `README.md`, `Makefile`, `.env.example`, `anton/__init__.py`, `tests/__init__.py`, `tests/conftest.py`
 - Test: `tests/unit/test_scaffold.py` (temporary sanity test, removed at task end)
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: a `uv sync`-able project with `ruff`, `mypy`, `pytest` runnable; import path `oracle.*` resolves.
+- Produces: a `uv sync`-able project with `ruff`, `mypy`, `pytest` runnable; import path `anton.*` resolves.
 
 - [ ] **Step 1: Write `pyproject.toml`**
 
 ```toml
 [project]
-name = "on-call-oracle"
+name = "son-of-anton"
 version = "0.1.0-phase1"
 description = "Multi-agent AI on-call assistant for data teams"
 readme = "README.md"
@@ -132,14 +132,14 @@ dev = [
 ]
 
 [project.scripts]
-oracle = "oracle.cli:app"
+anton = "anton.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["oracle"]
+packages = ["anton"]
 
 [tool.ruff]
 line-length = 100
@@ -166,8 +166,8 @@ markers = [
 ```
 # Copy to .env and fill in.
 ANTHROPIC_API_KEY=
-DATABASE_URL=postgres://oracle:oracle@localhost:5432/oracle?sslmode=disable
-ORACLE_LOG_LEVEL=INFO
+DATABASE_URL=postgres://anton:anton@localhost:5432/anton?sslmode=disable
+ANTON_LOG_LEVEL=INFO
 ```
 
 - [ ] **Step 3: Write `Makefile`**
@@ -179,11 +179,11 @@ install:
 	uv sync --all-extras
 
 lint:
-	uv run ruff check oracle tests
-	uv run ruff format --check oracle tests
+	uv run ruff check anton tests
+	uv run ruff format --check anton tests
 
 typecheck:
-	uv run mypy oracle
+	uv run mypy anton
 
 test:
 	uv run pytest tests/unit -v
@@ -201,7 +201,7 @@ db-migrate: db-up
 - [ ] **Step 4: Write a minimal `README.md`**
 
 ```markdown
-# On-Call Oracle
+# Son of Anton
 
 Multi-agent AI on-call assistant for data teams. Phase 1 in progress; see `docs/superpowers/plans/`.
 
@@ -216,7 +216,7 @@ make lint typecheck test
 - [ ] **Step 5: Create empty package files**
 
 ```
-touch oracle/__init__.py tests/__init__.py
+touch anton/__init__.py tests/__init__.py
 ```
 
 `tests/conftest.py`:
@@ -235,11 +235,11 @@ def anyio_backend() -> str:
 `tests/unit/test_scaffold.py`:
 
 ```python
-import oracle
+import anton
 
 
 def test_package_imports() -> None:
-    assert oracle.__name__ == "oracle"
+    assert anton.__name__ == "anton"
 ```
 
 - [ ] **Step 7: Run lint + typecheck + test**
@@ -249,12 +249,12 @@ uv sync --all-extras
 make lint typecheck test
 ```
 
-Expected: all pass. If `ruff format --check` complains, run `uv run ruff format oracle tests`.
+Expected: all pass. If `ruff format --check` complains, run `uv run ruff format anton tests`.
 
 - [ ] **Step 8: Commit**
 
 ```
-git add pyproject.toml README.md Makefile .env.example oracle/__init__.py \
+git add pyproject.toml README.md Makefile .env.example anton/__init__.py \
         tests/__init__.py tests/conftest.py tests/unit/test_scaffold.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "chore: project scaffold with uv, ruff, mypy, pytest"
@@ -265,7 +265,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 2: Settings loader
 
 **Files:**
-- Create: `oracle/config.py`, `config/settings.example.yaml`
+- Create: `anton/config.py`, `config/settings.example.yaml`
 - Test: `tests/unit/test_config.py`
 
 **Interfaces:**
@@ -279,13 +279,13 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ```python
 from pydantic import SecretStr
 
-from oracle.config import Settings
+from anton.config import Settings
 
 
 def test_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setenv("DATABASE_URL", "postgres://x:y@localhost/z")
-    monkeypatch.setenv("ORACLE_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("ANTON_LOG_LEVEL", "DEBUG")
 
     s = Settings()
 
@@ -311,9 +311,9 @@ def test_settings_missing_required_raises(monkeypatch) -> None:
 uv run pytest tests/unit/test_config.py -v
 ```
 
-Expected: `ModuleNotFoundError: No module named 'oracle.config'`.
+Expected: `ModuleNotFoundError: No module named 'anton.config'`.
 
-- [ ] **Step 3: Implement `oracle/config.py`**
+- [ ] **Step 3: Implement `anton/config.py`**
 
 ```python
 from functools import lru_cache
@@ -336,7 +336,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     database_url: str
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
-        default="INFO", alias="ORACLE_LOG_LEVEL"
+        default="INFO", alias="ANTON_LOG_LEVEL"
     )
     default_model: str = "claude-sonnet-4-6"
     per_incident_budget_usd: float = 0.50
@@ -368,7 +368,7 @@ uv run pytest tests/unit/test_config.py -v
 - [ ] **Step 6: Commit**
 
 ```
-git add oracle/config.py config/settings.example.yaml tests/unit/test_config.py
+git add anton/config.py config/settings.example.yaml tests/unit/test_config.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: settings loader with pydantic-settings"
 ```
@@ -383,7 +383,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `docker compose up postgres --wait` yields a Postgres 16 instance at `localhost:5432` with database `oracle`, user `oracle`, password `oracle`.
+- Produces: `docker compose up postgres --wait` yields a Postgres 16 instance at `localhost:5432` with database `anton`, user `anton`, password `anton`.
 
 - [ ] **Step 1: Write `docker-compose.yml`**
 
@@ -392,15 +392,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: oracle
-      POSTGRES_PASSWORD: oracle
-      POSTGRES_DB: oracle
+      POSTGRES_USER: anton
+      POSTGRES_PASSWORD: anton
+      POSTGRES_DB: anton
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "oracle", "-d", "oracle"]
+      test: ["CMD", "pg_isready", "-U", "anton", "-d", "anton"]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -413,7 +413,7 @@ volumes:
 
 ```
 docker compose up -d postgres --wait
-docker compose exec postgres psql -U oracle -d oracle -c "select 1;"
+docker compose exec postgres psql -U anton -d anton -c "select 1;"
 ```
 
 Expected: `?column? | 1`.
@@ -667,7 +667,7 @@ Or via Docker (no local install):
 ```
 docker run --rm --network host \
     -v "$(pwd)/migrations:/db/migrations" \
-    -e DATABASE_URL="postgres://oracle:oracle@localhost:5432/oracle?sslmode=disable" \
+    -e DATABASE_URL="postgres://anton:anton@localhost:5432/anton?sslmode=disable" \
     amacneil/dbmate up
 ```
 
@@ -697,7 +697,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 5: Domain types
 
 **Files:**
-- Create: `oracle/types.py`
+- Create: `anton/types.py`
 - Test: `tests/unit/test_types.py`
 
 **Interfaces:**
@@ -723,7 +723,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from oracle.types import (
+from anton.types import (
     ApprovalDecision,
     Caller,
     Citation,
@@ -815,7 +815,7 @@ uv run pytest tests/unit/test_types.py -v
 
 Expected: `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement `oracle/types.py`**
+- [ ] **Step 3: Implement `anton/types.py`**
 
 ```python
 from datetime import datetime
@@ -896,7 +896,7 @@ uv run pytest tests/unit/test_types.py -v
 - [ ] **Step 5: Commit**
 
 ```
-git add oracle/types.py tests/unit/test_types.py
+git add anton/types.py tests/unit/test_types.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: core pydantic domain types"
 ```
@@ -906,7 +906,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 6: Prompt registry
 
 **Files:**
-- Create: `oracle/prompts.py`, `prompts/generic.v1.yaml`
+- Create: `anton/prompts.py`, `prompts/generic.v1.yaml`
 - Test: `tests/unit/test_prompts.py`
 
 **Interfaces:**
@@ -926,7 +926,7 @@ from pathlib import Path
 
 import pytest
 
-from oracle.prompts import Prompt, load
+from anton.prompts import Prompt, load
 
 
 @pytest.fixture
@@ -1010,7 +1010,7 @@ def test_prompt_frozen(prompt_root: Path) -> None:
 uv run pytest tests/unit/test_prompts.py -v
 ```
 
-- [ ] **Step 3: Implement `oracle/prompts.py`**
+- [ ] **Step 3: Implement `anton/prompts.py`**
 
 ```python
 from pathlib import Path
@@ -1100,7 +1100,7 @@ model: claude-sonnet-4-6
 temperature: 0.2
 max_tokens: 2048
 system: |
-  You are On-Call Oracle, an assistant for data engineers investigating incidents.
+  You are Son of Anton, an assistant for data engineers investigating incidents.
 
   Ground rules:
   - Answer plainly. Ask clarifying questions when the request is ambiguous.
@@ -1130,7 +1130,7 @@ uv run pytest tests/unit/test_prompts.py -v
 - [ ] **Step 6: Commit**
 
 ```
-git add oracle/prompts.py prompts/generic.v1.yaml tests/unit/test_prompts.py
+git add anton/prompts.py prompts/generic.v1.yaml tests/unit/test_prompts.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: yaml prompt registry with versioning"
 ```
@@ -1140,7 +1140,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 7: LLM gateway
 
 **Files:**
-- Create: `oracle/llm.py`
+- Create: `anton/llm.py`
 - Test: `tests/unit/test_llm.py`
 
 **Interfaces:**
@@ -1161,8 +1161,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from oracle.llm import LLMGateway, LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.llm import LLMGateway, LLMResult
+from anton.prompts import RenderedPrompt
 
 
 @pytest.fixture
@@ -1207,7 +1207,7 @@ async def test_complete_returns_result_and_writes_audit(rendered: RenderedPrompt
     audit = AsyncMock()
     gw = LLMGateway(audit_writer=audit)
 
-    with patch("oracle.llm.acompletion", AsyncMock(return_value=_fake_litellm_response())):
+    with patch("anton.llm.acompletion", AsyncMock(return_value=_fake_litellm_response())):
         result = await gw.complete(rendered)
 
     assert isinstance(result, LLMResult)
@@ -1234,7 +1234,7 @@ async def test_complete_retries_on_rate_limit(rendered: RenderedPrompt) -> None:
             _fake_litellm_response(),
         ]
     )
-    with patch("oracle.llm.acompletion", call):
+    with patch("anton.llm.acompletion", call):
         result = await gw.complete(rendered)
 
     assert result.text == "yes"
@@ -1254,7 +1254,7 @@ async def test_complete_records_error_and_reraises(rendered: RenderedPrompt) -> 
             model="claude-sonnet-4-6",
         )
     )
-    with patch("oracle.llm.acompletion", call):
+    with patch("anton.llm.acompletion", call):
         with pytest.raises(Exception):
             await gw.complete(rendered)
 
@@ -1269,7 +1269,7 @@ async def test_complete_records_error_and_reraises(rendered: RenderedPrompt) -> 
 uv run pytest tests/unit/test_llm.py -v
 ```
 
-- [ ] **Step 3: Implement `oracle/llm.py`**
+- [ ] **Step 3: Implement `anton/llm.py`**
 
 ```python
 from __future__ import annotations
@@ -1289,7 +1289,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from oracle.prompts import RenderedPrompt
+from anton.prompts import RenderedPrompt
 
 AuditWriter = Callable[..., Awaitable[None]]
 
@@ -1408,7 +1408,7 @@ uv run pytest tests/unit/test_llm.py -v
 - [ ] **Step 5: Commit**
 
 ```
-git add oracle/llm.py tests/unit/test_llm.py
+git add anton/llm.py tests/unit/test_llm.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: LiteLLM gateway with cache_control, retries, cost tracking"
 ```
@@ -1418,14 +1418,14 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 8: Postgres helper + audit writer
 
 **Files:**
-- Create: `oracle/db.py`, `oracle/audit.py`
+- Create: `anton/db.py`, `anton/audit.py`
 - Test: `tests/unit/test_audit.py`, `tests/integration/test_audit_integration.py`
 
 **Interfaces:**
 - Consumes: `Settings.database_url` (Task 2), `LLMResult`, `RenderedPrompt`.
 - Produces:
-  - `oracle.db.pool()` returning a cached `asyncpg.Pool`; `oracle.db.close_pool()` for teardown.
-  - `AuditWriter` class with `async def record_llm_call(*, prompt: RenderedPrompt, result: LLMResult | None, error: str | None, incident_id: str | None = None) -> None` matching the callable shape `oracle.llm.LLMGateway` expects.
+  - `anton.db.pool()` returning a cached `asyncpg.Pool`; `anton.db.close_pool()` for teardown.
+  - `AuditWriter` class with `async def record_llm_call(*, prompt: RenderedPrompt, result: LLMResult | None, error: str | None, incident_id: str | None = None) -> None` matching the callable shape `anton.llm.LLMGateway` expects.
   - The class exposes `.callable` returning an `AuditWriter`-compatible partial for wiring into the gateway.
 
 - [ ] **Step 1: Write the unit test (uses a fake pool)**
@@ -1438,9 +1438,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.audit import AuditWriter
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 
 @pytest.fixture
@@ -1494,14 +1494,14 @@ async def test_record_llm_call_success(rendered: RenderedPrompt) -> None:
 uv run pytest tests/unit/test_audit.py -v
 ```
 
-- [ ] **Step 3: Implement `oracle/db.py`**
+- [ ] **Step 3: Implement `anton/db.py`**
 
 ```python
 from __future__ import annotations
 
 import asyncpg
 
-from oracle.config import get_settings
+from anton.config import get_settings
 
 _pool: asyncpg.Pool | None = None
 
@@ -1523,15 +1523,15 @@ async def close_pool() -> None:
         _pool = None
 ```
 
-- [ ] **Step 4: Implement `oracle/audit.py`**
+- [ ] **Step 4: Implement `anton/audit.py`**
 
 ```python
 from __future__ import annotations
 
 from typing import Any
 
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 _INSERT_LLM = """
 insert into audit_llm_calls
@@ -1599,9 +1599,9 @@ import os
 import asyncpg
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.audit import AuditWriter
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -1665,7 +1665,7 @@ uv run pytest tests/integration/test_audit_integration.py -v -m integration
 - [ ] **Step 8: Commit**
 
 ```
-git add oracle/db.py oracle/audit.py tests/unit/test_audit.py \
+git add anton/db.py anton/audit.py tests/unit/test_audit.py \
         tests/integration/test_audit_integration.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: postgres audit writer with LLM-call persistence"
@@ -1676,14 +1676,14 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 9: Stub retriever
 
 **Files:**
-- Create: `oracle/retrieval/__init__.py`, `oracle/retrieval/base.py`, `oracle/retrieval/stub.py`
+- Create: `anton/retrieval/__init__.py`, `anton/retrieval/base.py`, `anton/retrieval/stub.py`
 - Test: `tests/unit/test_retrieval_stub.py`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
   - `Retriever` protocol: `async def search(query: str, *, scope: list[str] | None = None, top_k: int = 5) -> list[Citation]`
-  - `StubRetriever` implementation that returns an empty list. Kept as the Phase 1 placeholder so `OracleService` can construct a valid retriever without importing Qdrant. Phase 2 will replace with the real retriever.
+  - `StubRetriever` implementation that returns an empty list. Kept as the Phase 1 placeholder so `AntonService` can construct a valid retriever without importing Qdrant. Phase 2 will replace with the real retriever.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1692,7 +1692,7 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ```python
 import pytest
 
-from oracle.retrieval.stub import StubRetriever
+from anton.retrieval.stub import StubRetriever
 
 
 @pytest.mark.asyncio
@@ -1717,21 +1717,21 @@ uv run pytest tests/unit/test_retrieval_stub.py -v
 
 - [ ] **Step 3: Implement the package**
 
-`oracle/retrieval/__init__.py`:
+`anton/retrieval/__init__.py`:
 
 ```python
-from oracle.retrieval.base import Retriever
-from oracle.retrieval.stub import StubRetriever
+from anton.retrieval.base import Retriever
+from anton.retrieval.stub import StubRetriever
 
 __all__ = ["Retriever", "StubRetriever"]
 ```
 
-`oracle/retrieval/base.py`:
+`anton/retrieval/base.py`:
 
 ```python
 from typing import Protocol
 
-from oracle.types import Citation
+from anton.types import Citation
 
 
 class Retriever(Protocol):
@@ -1745,10 +1745,10 @@ class Retriever(Protocol):
         ...
 ```
 
-`oracle/retrieval/stub.py`:
+`anton/retrieval/stub.py`:
 
 ```python
-from oracle.types import Citation
+from anton.types import Citation
 
 
 class StubRetriever:
@@ -1771,23 +1771,23 @@ uv run pytest tests/unit/test_retrieval_stub.py -v
 - [ ] **Step 5: Commit**
 
 ```
-git add oracle/retrieval/ tests/unit/test_retrieval_stub.py
+git add anton/retrieval/ tests/unit/test_retrieval_stub.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: retriever protocol + phase-1 stub implementation"
 ```
 
 ---
 
-## Task 10: OracleService (Phase 1 orchestrator)
+## Task 10: AntonService (Phase 1 orchestrator)
 
 **Files:**
-- Create: `oracle/service.py`
+- Create: `anton/service.py`
 - Test: `tests/unit/test_service.py`
 
 **Interfaces:**
 - Consumes: `LLMGateway` (Task 7), `Retriever` (Task 9), prompt registry `load` (Task 6), `Caller`, `IncidentResponse` (Task 5).
 - Produces:
-  - `class OracleService`
+  - `class AntonService`
     - `def __init__(self, *, llm: LLMGateway, retriever: Retriever, prompt_name: str = "generic")`
     - `async def ask(question: str, *, incident_id: str | None, caller: Caller) -> IncidentResponse`
   - Behavior for Phase 1:
@@ -1806,10 +1806,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oracle.llm import LLMResult
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.llm import LLMResult
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
 
 @pytest.mark.asyncio
@@ -1822,7 +1822,7 @@ async def test_ask_returns_incident_response_and_calls_llm() -> None:
             cache_read=True, model="claude-sonnet-4-6", request_id="resp_1",
         )
     )
-    svc = OracleService(llm=llm, retriever=StubRetriever())
+    svc = AntonService(llm=llm, retriever=StubRetriever())
 
     resp = await svc.ask(
         "why is fct_orders stale?",
@@ -1850,7 +1850,7 @@ async def test_ask_uses_provided_incident_id() -> None:
             cache_read=False, model="claude-sonnet-4-6", request_id="r",
         )
     )
-    svc = OracleService(llm=llm, retriever=StubRetriever())
+    svc = AntonService(llm=llm, retriever=StubRetriever())
 
     resp = await svc.ask(
         "hi", incident_id="INC-fixed", caller=Caller(source="api", identity="k")
@@ -1864,20 +1864,20 @@ async def test_ask_uses_provided_incident_id() -> None:
 uv run pytest tests/unit/test_service.py -v
 ```
 
-- [ ] **Step 3: Implement `oracle/service.py`**
+- [ ] **Step 3: Implement `anton/service.py`**
 
 ```python
 from __future__ import annotations
 
 import uuid
 
-from oracle.llm import LLMGateway
-from oracle.prompts import load as load_prompt
-from oracle.retrieval.base import Retriever
-from oracle.types import Caller, IncidentResponse
+from anton.llm import LLMGateway
+from anton.prompts import load as load_prompt
+from anton.retrieval.base import Retriever
+from anton.types import Caller, IncidentResponse
 
 
-class OracleService:
+class AntonService:
     def __init__(
         self,
         *,
@@ -1931,9 +1931,9 @@ uv run pytest tests/unit/test_service.py -v
 - [ ] **Step 5: Commit**
 
 ```
-git add oracle/service.py tests/unit/test_service.py
+git add anton/service.py tests/unit/test_service.py
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
-    commit -m "feat: OracleService phase-1 orchestrator"
+    commit -m "feat: AntonService phase-1 orchestrator"
 ```
 
 ---
@@ -1941,17 +1941,17 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 ## Task 11: Typer CLI
 
 **Files:**
-- Create: `oracle/cli.py`
+- Create: `anton/cli.py`
 - Test: `tests/unit/test_cli.py`
 
 **Interfaces:**
-- Consumes: `OracleService` (Task 10), `LLMGateway` (Task 7), `AuditWriter` (Task 8), `StubRetriever` (Task 9), `Settings` (Task 2), `oracle.db.pool` (Task 8).
+- Consumes: `AntonService` (Task 10), `LLMGateway` (Task 7), `AuditWriter` (Task 8), `StubRetriever` (Task 9), `Settings` (Task 2), `anton.db.pool` (Task 8).
 - Produces:
-  - `oracle` Typer app entry point (registered in `pyproject.toml`, Task 1).
-  - Command `oracle ask "QUESTION"` prints the answer to stdout.
+  - `anton` Typer app entry point (registered in `pyproject.toml`, Task 1).
+  - Command `anton ask "QUESTION"` prints the answer to stdout.
     - Flags: `--incident-id`, `--json` (emits full `IncidentResponse` as JSON), `--stream` (Phase 1 stub, warns "streaming lands in Phase 3").
     - Exit code `0` on success, `1` on API error.
-  - Command `oracle audit tail [--limit N]` prints the last N `audit_llm_calls` rows.
+  - Command `anton audit-tail [--limit N]` prints the last N `audit_llm_calls` rows.
 
 - [ ] **Step 1: Write the failing CLI test**
 
@@ -1962,8 +1962,8 @@ from unittest.mock import AsyncMock, patch
 
 from typer.testing import CliRunner
 
-from oracle.cli import app
-from oracle.types import IncidentResponse
+from anton.cli import app
+from anton.types import IncidentResponse
 
 runner = CliRunner()
 
@@ -1983,8 +1983,8 @@ def test_ask_prints_answer() -> None:
     svc = AsyncMock()
     svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
-        patch("oracle.cli.close_pool", AsyncMock()),
+        patch("anton.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("anton.cli.close_pool", AsyncMock()),
     ):
         r = runner.invoke(app, ["ask", "hi there"])
 
@@ -1996,8 +1996,8 @@ def test_ask_json_flag_emits_json() -> None:
     svc = AsyncMock()
     svc.ask = AsyncMock(return_value=_fake_response())
     with (
-        patch("oracle.cli.build_service", AsyncMock(return_value=(svc, None))),
-        patch("oracle.cli.close_pool", AsyncMock()),
+        patch("anton.cli.build_service", AsyncMock(return_value=(svc, None))),
+        patch("anton.cli.close_pool", AsyncMock()),
     ):
         r = runner.invoke(app, ["ask", "hi", "--json"])
 
@@ -2011,7 +2011,7 @@ def test_ask_json_flag_emits_json() -> None:
 uv run pytest tests/unit/test_cli.py -v
 ```
 
-- [ ] **Step 3: Implement `oracle/cli.py`**
+- [ ] **Step 3: Implement `anton/cli.py`**
 
 Key correctness constraint: every command runs a single `asyncio.run(_work())`; the asyncpg pool is created and closed inside that same loop. Do not spin a second event loop.
 
@@ -2026,23 +2026,23 @@ import asyncpg
 import typer
 from rich.console import Console
 
-from oracle.audit import AuditWriter
-from oracle.db import close_pool, pool
-from oracle.llm import LLMGateway
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.audit import AuditWriter
+from anton.db import close_pool, pool
+from anton.llm import LLMGateway
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
-app = typer.Typer(help="On-Call Oracle CLI (phase 1)")
+app = typer.Typer(help="Son of Anton CLI (phase 1)")
 console = Console()
 
 
-async def build_service() -> tuple[OracleService, asyncpg.Pool]:
+async def build_service() -> tuple[AntonService, asyncpg.Pool]:
     """Async factory: opens the pool and wires the service on the current loop."""
     p = await pool()
     writer = AuditWriter(pool=p)
     gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
-    svc = OracleService(llm=gateway, retriever=StubRetriever())
+    svc = AntonService(llm=gateway, retriever=StubRetriever())
     return svc, p
 
 
@@ -2128,8 +2128,8 @@ uv run pytest tests/unit/test_cli.py -v
 ```
 make db-up && make db-migrate
 export $(grep -v '^#' .env | xargs)
-uv run oracle ask "in two sentences: what is a dbt incremental model?"
-uv run oracle audit-tail --limit 3
+uv run anton ask "in two sentences: what is a dbt incremental model?"
+uv run anton audit-tail --limit 3
 ```
 
 Expected: an answer prints; `audit-tail` shows a row with a non-zero `tokens_out`.
@@ -2137,7 +2137,7 @@ Expected: an answer prints; `audit-tail` shows a row with a non-zero `tokens_out
 - [ ] **Step 7: Commit**
 
 ```
-git add oracle/cli.py tests/unit/test_cli.py pyproject.toml
+git add anton/cli.py tests/unit/test_cli.py pyproject.toml
 git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
     commit -m "feat: typer CLI with 'ask' and 'audit-tail' commands"
 ```
@@ -2186,11 +2186,11 @@ import asyncpg
 import os
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMGateway
-from oracle.retrieval.stub import StubRetriever
-from oracle.service import OracleService
-from oracle.types import Caller
+from anton.audit import AuditWriter
+from anton.llm import LLMGateway
+from anton.retrieval.stub import StubRetriever
+from anton.service import AntonService
+from anton.types import Caller
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio, pytest.mark.needs_llm]
 
@@ -2208,7 +2208,7 @@ async def test_ask_end_to_end_writes_audit_row() -> None:
 
         writer = AuditWriter(pool=pool)
         gateway = LLMGateway(audit_writer=writer.as_gateway_callable())
-        svc = OracleService(llm=gateway, retriever=StubRetriever())
+        svc = AntonService(llm=gateway, retriever=StubRetriever())
 
         resp = await svc.ask(
             "in one sentence: what is dbt?",
@@ -2268,15 +2268,15 @@ git -c user.name="Mona Alkhatib" -c user.email=muna.alkhateeb@gmail.com \
 
 ## Phase 1 done: what you have
 
-At the end of Task 12, `oracle ask "..."` runs a real LLM call, persists an audit row, and returns an `IncidentResponse`. Every LLM call goes through the versioned prompt registry and the LiteLLM gateway. The Postgres schema is in place for every downstream table Phase 2-5 will populate. The stub retriever, generic specialist, and read-only default hold the multi-agent seat for Phase 2.
+At the end of Task 12, `anton ask "..."` runs a real LLM call, persists an audit row, and returns an `IncidentResponse`. Every LLM call goes through the versioned prompt registry and the LiteLLM gateway. The Postgres schema is in place for every downstream table Phase 2-5 will populate. The stub retriever, generic specialist, and read-only default hold the multi-agent seat for Phase 2.
 
-**Next plan:** `2026-07-15-on-call-oracle-phase2-retrieval.md` (Qdrant + BM25 + rerank + all five corpora ingesters + retrieval ablation eval).
+**Next plan:** `2026-07-15-son-of-anton-phase2-retrieval.md` (Qdrant + BM25 + rerank + all five corpora ingesters + retrieval ablation eval).
 
 ---
 
 ## Self-review notes
 
-- **Spec coverage (Phase 1 items only):** repo scaffold (Task 1), Postgres + migrations (Tasks 3, 4), prompt registry (Task 6), LiteLLM gateway (Task 7), audit log (Task 8), `OracleService` skeleton (Task 10), stub retriever (Task 9), CLI (Task 11), end-to-end proof (Task 12). Settings (Task 2) and domain types (Task 5) are Phase 1 prerequisites the spec assumes but does not list separately; covered.
+- **Spec coverage (Phase 1 items only):** repo scaffold (Task 1), Postgres + migrations (Tasks 3, 4), prompt registry (Task 6), LiteLLM gateway (Task 7), audit log (Task 8), `AntonService` skeleton (Task 10), stub retriever (Task 9), CLI (Task 11), end-to-end proof (Task 12). Settings (Task 2) and domain types (Task 5) are Phase 1 prerequisites the spec assumes but does not list separately; covered.
 - **Placeholder scan:** none. All code blocks are complete.
-- **Type consistency:** `Prompt`, `RenderedPrompt`, `LLMResult`, `AuditWriter`, `OracleService`, `Caller`, `IncidentResponse`, `Citation`, `ProposedAction`, `RoutingDecision`, `SpecialistFindings`, `ApprovalDecision`, `Retriever`, `StubRetriever` all consistent across tasks.
-- **Scope check:** 12 tasks, one working `oracle ask` end-to-end path. Multi-agent, real retrieval, adapters, and Slack are deferred to their own phase plans. Correctly scoped.
+- **Type consistency:** `Prompt`, `RenderedPrompt`, `LLMResult`, `AuditWriter`, `AntonService`, `Caller`, `IncidentResponse`, `Citation`, `ProposedAction`, `RoutingDecision`, `SpecialistFindings`, `ApprovalDecision`, `Retriever`, `StubRetriever` all consistent across tasks.
+- **Scope check:** 12 tasks, one working `anton ask` end-to-end path. Multi-agent, real retrieval, adapters, and Slack are deferred to their own phase plans. Correctly scoped.

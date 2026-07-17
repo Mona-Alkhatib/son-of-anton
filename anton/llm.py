@@ -15,7 +15,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from oracle.prompts import RenderedPrompt
+from anton.prompts import RenderedPrompt
 
 AuditWriter = Callable[..., Awaitable[None]]
 

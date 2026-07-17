@@ -5,7 +5,7 @@ __pycache__/
 .env.*
 !.env.example
 .venv/
-.oracle/
+.anton/
 mlruns/
 mlruns.db
 *.duckdb

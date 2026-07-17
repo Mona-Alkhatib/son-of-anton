@@ -3,9 +3,9 @@ import os
 import asyncpg
 import pytest
 
-from oracle.audit import AuditWriter
-from oracle.llm import LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.audit import AuditWriter
+from anton.llm import LLMResult
+from anton.prompts import RenderedPrompt
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 

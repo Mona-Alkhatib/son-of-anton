@@ -1,13 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from oracle.config import Settings
+from anton.config import Settings
 
 
 def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setenv("DATABASE_URL", "postgres://x:y@localhost/z")
-    monkeypatch.setenv("ORACLE_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("ANTON_LOG_LEVEL", "DEBUG")
 
     s = Settings()
 

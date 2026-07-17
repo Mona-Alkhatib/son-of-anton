@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from oracle.llm import LLMGateway, LLMResult
-from oracle.prompts import RenderedPrompt
+from anton.llm import LLMGateway, LLMResult
+from anton.prompts import RenderedPrompt
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ async def test_complete_returns_result_and_writes_audit(rendered: RenderedPrompt
     audit = AsyncMock()
     gw = LLMGateway(audit_writer=audit)
 
-    with patch("oracle.llm.acompletion", AsyncMock(return_value=_fake_litellm_response())):
+    with patch("anton.llm.acompletion", AsyncMock(return_value=_fake_litellm_response())):
         result = await gw.complete(rendered)
 
     assert isinstance(result, LLMResult)
@@ -76,7 +76,7 @@ async def test_complete_retries_on_rate_limit(rendered: RenderedPrompt) -> None:
             _fake_litellm_response(),
         ]
     )
-    with patch("oracle.llm.acompletion", call):
+    with patch("anton.llm.acompletion", call):
         result = await gw.complete(rendered)
 
     assert result.text == "yes"
@@ -98,7 +98,7 @@ async def test_complete_records_error_and_reraises(rendered: RenderedPrompt) -> 
             model="claude-sonnet-4-6",
         )
     )
-    with patch("oracle.llm.acompletion", call), pytest.raises(Exception):  # noqa: B017
+    with patch("anton.llm.acompletion", call), pytest.raises(Exception):  # noqa: B017
         await gw.complete(rendered)
 
     audit.assert_awaited_once()

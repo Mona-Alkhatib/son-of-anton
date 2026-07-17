@@ -4,11 +4,11 @@ install:
 	uv sync --all-extras
 
 lint:
-	uv run ruff check oracle tests
-	uv run ruff format --check oracle tests
+	uv run ruff check anton tests
+	uv run ruff format --check anton tests
 
 typecheck:
-	uv run mypy oracle
+	uv run mypy anton
 
 test:
 	uv run pytest tests/unit -v
