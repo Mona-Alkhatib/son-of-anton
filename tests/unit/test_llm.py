@@ -102,5 +102,6 @@ async def test_complete_records_error_and_reraises(rendered: RenderedPrompt) -> 
         await gw.complete(rendered)
 
     audit.assert_awaited_once()
-    args, kwargs = audit.await_args
-    assert kwargs["error"] is not None or (args and args[-1] is not None)
+    kwargs = audit.await_args.kwargs
+    assert kwargs["error"] is not None
+    assert kwargs["result"] is None

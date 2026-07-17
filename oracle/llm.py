@@ -9,7 +9,6 @@ import litellm
 from litellm import acompletion
 from pydantic import BaseModel, ConfigDict
 from tenacity import (
-    RetryError,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -124,4 +123,4 @@ async def _call_with_retry(**kwargs: Any) -> Any:
     return await acompletion(**kwargs)
 
 
-__all__ = ["LLMGateway", "LLMResult", "RetryError"]
+__all__ = ["LLMGateway", "LLMResult"]

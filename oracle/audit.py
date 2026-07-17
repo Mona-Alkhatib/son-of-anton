@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from oracle.llm import LLMResult
@@ -26,7 +27,7 @@ class AuditWriter:
         error: str | None,
         incident_id: str | None = None,
     ) -> None:
-        request_id = result.request_id if result is not None else f"err-{id(prompt):x}"
+        request_id = result.request_id if result is not None else f"err-{uuid.uuid4().hex[:12]}"
         model = result.model if result is not None else str(prompt.metadata.get("model"))
         async with self._pool.acquire() as conn:
             await conn.execute(
