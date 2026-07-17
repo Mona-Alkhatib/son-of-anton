@@ -60,4 +60,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "integration: requires docker-compose stack + optional ANTHROPIC_API_KEY",
+    "needs_llm: requires a live Anthropic API key",
 ]
